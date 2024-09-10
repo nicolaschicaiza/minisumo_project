@@ -16,7 +16,9 @@
 #define FREQ 2100
 #define RESOLUTION 8
 // DIRECCIONES
-enum direction { STOP, FORWARD, BACKWARD, RIGHT, LEFT };
+enum DIRECTION { STOP, FORWARD, BACKWARD, RIGHT, LEFT };
+// VELOCIDAD
+enum VELOCIDAD { SLOW, MEDIUM, TOP };
 
 // !!!! DISTANCIA !!!!
 // ULTRASONIDO 1
@@ -38,6 +40,9 @@ bool manualMode = false;
 
 // Crear una instancia del controlador Bluetooth
 // ESP32BleGamepad gamepad;
+//
+String direction = "";
+int velocidad = 200;
 
 void setup() {
   // Configuración de pines
@@ -59,10 +64,10 @@ void loop() {
 
 void test() {
   Serial.println("BACKWARD");
-  controlEngine(255, BACKWARD);
+  controlEngine(TOP, BACKWARD);
   delay(2000);
   Serial.println("FORWARD");
-  controlEngine(255, FORWARD);
+  controlEngine(TOP, FORWARD);
   delay(2000);
 }
 
@@ -95,6 +100,7 @@ void primary() {
   // }
 
   // delay(100); // Esperar un poco antes de la siguiente lectura
+  printVariables(direction, velocidad);
 }
 
 // Función para configurar los motores
@@ -124,8 +130,17 @@ void setupInfraredSensors() {
 }
 
 // Función para controlar los motores
-void controlEngine(int speed, direction dir) {
-  String direction = "";
+void controlEngine(VELOCIDAD speed, DIRECTION dir) {
+  // Detener motores para evitar picos de voltaje
+  digitalWrite(ENG1PIN1, LOW);
+  digitalWrite(ENG1PIN2, LOW);
+  digitalWrite(ENG2PIN1, LOW);
+  digitalWrite(ENG2PIN2, LOW);
+  ledcWrite(ENABLE1PIN, 0);
+  ledcWrite(ENABLE2PIN, 0);
+  
+  delayMicroseconds(25);  // Pequeña pausa
+
   switch (dir) {
     case FORWARD:
       digitalWrite(ENG1PIN1, HIGH);
@@ -164,9 +179,33 @@ void controlEngine(int speed, direction dir) {
       direction = "STOP";
       break;
   }
-  printVariables(direction);
-  ledcWrite(ENABLE1PIN, speed); // Canal PWM para motor izquierdo
-  ledcWrite(ENABLE2PIN, speed); // Canal PWM para motor derecho
+  delayMicroseconds(25);  // Pequeña pausa
+  controlSpeed(speed);
+}
+
+// Función para controlar velocidad
+void controlSpeed(VELOCIDAD speed) {
+  int value = 0;
+  if (speed == SLOW) {
+    value = 220;
+  } else if (speed == MEDIUM) {
+    value = 235;
+  } else {
+    value = 255;
+  }
+  switch (speed) {
+    case SLOW:
+      ledcWrite(ENABLE1PIN, value); // Canal PWM para motor izquierdo
+      ledcWrite(ENABLE2PIN, value); // Canal PWM para motor derecho
+    case MEDIUM:
+    default:
+      ledcWrite(ENABLE1PIN, value); // Canal PWM para motor izquierdo
+      ledcWrite(ENABLE2PIN, value); // Canal PWM para motor derecho
+    case TOP:
+      ledcWrite(ENABLE1PIN, value); // Canal PWM para motor izquierdo
+      ledcWrite(ENABLE2PIN, value); // Canal PWM para motor derecho
+  }
+  velocidad = value;
 }
 
 // Función para leer la distancia de un sensor ultrasónico
@@ -216,19 +255,19 @@ void handleAutonomousMode(float distanceFront, float distanceSide, bool irSensor
 // Función para manejar un obstáculo frontal
 void handleFrontObstacle(float distanceFront) {
   Serial.println("handleFrontObstacle");
-  controlEngine(255, FORWARD);
+  controlEngine(TOP, FORWARD);
 }
 
 // Función para manejar un obstáculo lateral
 void handleSideObstacle(float distanceSide) {
   Serial.println("handleSideObstacle");
-  controlEngine(150, RIGHT);
+  controlEngine(MEDIUM, RIGHT);
   delay(500);
   distanceSide = readDistance(SOUND2TRIGGER, SOUND2ECHO);
   if (distanceSide >= 15) {
-    controlEngine(150, LEFT);
+    controlEngine(MEDIUM, LEFT);
     delay(500);
-    controlEngine(150, STOP);
+    controlEngine(MEDIUM, STOP);
     delay(500);
   }
 }
@@ -236,13 +275,13 @@ void handleSideObstacle(float distanceSide) {
 // Función para manejar la ausencia de obstáculos
 void handleNoObstacle(float distanceFront, float distanceSide) {
   Serial.println("handleNoObstacle");
-  controlEngine(150, RIGHT);
+  controlEngine(SLOW, RIGHT);
   delay(500);
   distanceFront = readDistance(SOUND1TRIGGER, SOUND1ECHO);
   if (distanceFront >= 10) {
-    controlEngine(150, LEFT);
+    controlEngine(MEDIUM, LEFT);
     delay(500);
-    controlEngine(150, STOP);
+    controlEngine(MEDIUM, STOP);
     delay(500);
   }
 }
@@ -252,17 +291,17 @@ void handleEdgeDetection(bool irSensor1, bool irSensor2) {
   Serial.println("handleEdgeDetection");
   if (irSensor1 == LOW || irSensor2 == LOW) {
     if (irSensor1 == LOW) {
-      controlEngine(150, RIGHT);
+      controlEngine(SLOW, RIGHT);
       delay(500);
     } else if (irSensor2 == LOW) {
-      controlEngine(150, LEFT);
+      controlEngine(SLOW, LEFT);
       delay(500);
     }
   }
 }
 
-void printVariables(String dir) {
-  Serial.println("---- Loop ---- Loop ----");
+void printVariables(String dir, int speed) {
+  Serial.println("---- Loop ---- Start ----");
   Serial.print("Modo: ");
   if (manualMode) {
     Serial.println("Manual");
@@ -279,5 +318,8 @@ void printVariables(String dir) {
   Serial.println("---- ---- ----");
   Serial.print("Dirección: ");
   Serial.println(dir);
-
+  Serial.println("---- ---- ----");
+  Serial.print("Velocidad: ");
+  Serial.println(speed);
+  Serial.println("---- Loop ---- End ----");
 }
