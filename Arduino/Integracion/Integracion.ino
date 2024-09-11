@@ -42,7 +42,11 @@ bool manualMode = false;
 // ESP32BleGamepad gamepad;
 //
 String direction = "";
-int velocidad = 200;
+int velocidad = 0;
+
+const int slow = 150;
+const int medium = 180;
+const int top = 220;
 
 void setup() {
   // Configuración de pines
@@ -185,27 +189,21 @@ void controlEngine(VELOCIDAD speed, DIRECTION dir) {
 
 // Función para controlar velocidad
 void controlSpeed(VELOCIDAD speed) {
-  int value = 0;
-  if (speed == SLOW) {
-    value = 220;
-  } else if (speed == MEDIUM) {
-    value = 235;
-  } else {
-    value = 255;
-  }
   switch (speed) {
     case SLOW:
-      ledcWrite(ENABLE1PIN, value); // Canal PWM para motor izquierdo
-      ledcWrite(ENABLE2PIN, value); // Canal PWM para motor derecho
+      ledcWrite(ENABLE1PIN, slow); // Canal PWM para motor izquierdo
+      ledcWrite(ENABLE2PIN, slow); // Canal PWM para motor derecho
+      velocidad = slow;
     case MEDIUM:
     default:
-      ledcWrite(ENABLE1PIN, value); // Canal PWM para motor izquierdo
-      ledcWrite(ENABLE2PIN, value); // Canal PWM para motor derecho
+      ledcWrite(ENABLE1PIN, medium); // Canal PWM para motor izquierdo
+      ledcWrite(ENABLE2PIN, medium); // Canal PWM para motor derecho
+      velocidad = medium;
     case TOP:
-      ledcWrite(ENABLE1PIN, value); // Canal PWM para motor izquierdo
-      ledcWrite(ENABLE2PIN, value); // Canal PWM para motor derecho
+      ledcWrite(ENABLE1PIN, medium); // Canal PWM para motor izquierdo
+      ledcWrite(ENABLE2PIN, medium); // Canal PWM para motor derecho
+      velocidad = top;
   }
-  velocidad = value;
 }
 
 // Función para leer la distancia de un sensor ultrasónico
