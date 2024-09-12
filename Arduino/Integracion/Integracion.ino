@@ -1,5 +1,5 @@
 #include <Arduino.h>
-// #include <ESP32BleGamepad.h>
+#include <XboxSeriesXControllerESP32_asukiaaa.hpp>
 
 // Definición de pines
 
@@ -16,9 +16,19 @@
 #define FREQ 2100
 #define RESOLUTION 8
 // DIRECCIONES
-enum DIRECTION { STOP, FORWARD, BACKWARD, RIGHT, LEFT };
+enum DIRECTION { 
+  STOP,
+  FORWARD,
+  BACKWARD,
+  RIGHT,
+  LEFT,
+  FORWARD_RIGHT,
+  FORWARD_LEFT,
+  BACKWARD_RIGHT,
+  BACKWARD_LEFT
+};
 // VELOCIDAD
-enum VELOCIDAD { SLOW, MEDIUM, TOP };
+enum VELOCIDAD { SLOW, MEDIUM, TOP, BRAKER };
 
 // !!!! DISTANCIA !!!!
 // ULTRASONIDO 1
@@ -35,7 +45,7 @@ enum VELOCIDAD { SLOW, MEDIUM, TOP };
 #define IR2PIN 22
 
 // Variables para el control manual y el modo autónomo
-bool manualMode = false;
+bool manualMode = true;
 // bool autonomousMode = false;
 
 // Crear una instancia del controlador Bluetooth
@@ -44,9 +54,13 @@ bool manualMode = false;
 String direction = "";
 int velocidad = 0;
 
-const int slow = 150;
-const int medium = 180;
-const int top = 220;
+XboxSeriesXControllerESP32_asukiaaa::Core
+xboxController("68:6C:E6:96:99:7E");  //Nicolas
+
+const int braker = 0;
+const int slow = 30;
+const int medium = 90;
+const int top = 160;
 
 void setup() {
   // Configuración de pines
@@ -55,7 +69,7 @@ void setup() {
   setupInfraredSensors();
 
   // Inicializar el controlador Bluetooth
-  // gamepad.begin();
+  xboxController.begin();
 
   // !!!! SERIAL !!!!
   Serial.begin(115200);
@@ -77,33 +91,131 @@ void test() {
 
 void primary() {
   // Leer los datos del controlador Bluetooth
-  // gamepad.read();
+  readControl();
 
-  // Leer distancias desde los sensores ultrasónicos
-  float distanceFront = readDistance(SOUND1TRIGGER, SOUND1ECHO);
-  float distanceSide = readDistance(SOUND2TRIGGER, SOUND2ECHO);
+  delay(5); // Esperar un poco antes de la siguiente lectura
+  // printVariables(direction, velocidad);
+}
 
-  // Leer los valores de los sensores infrarrojos
-  bool irSensor1 = digitalRead(IR1PIN);
-  bool irSensor2 = digitalRead(IR2PIN);
+void readSensores() {
+
+}
+
+// Funcione para leer el control
+void readControl() {
+  xboxController.onLoop();
+
+  // Leer boton Start
+  bool btnStart = xboxController.xboxNotif.btnStart;
+
+  // Print de los valores de los botones
+  Serial.println("---- Control ---- Start ----");
+  Serial.print("Botón Start: ");
+  Serial.println(btnStart);
+
+  // Gestionar cambio de modo
+  if (btnStart) {
+    manualMode = !manualMode;
+  }
 
   // Modo manual
   if (manualMode) {
+    Serial.println("Modo manual");
     handleManualMode();
   }
   // Modo autónomo
   else {
-    handleAutonomousMode(distanceFront, distanceSide, irSensor1, irSensor2);
+    Serial.println("Modo autónomo");
+    handleAutonomousMode();
   }
 
-  // Verificar si se presionó el botón para cambiar de modo
-  // if (gamepad.isPressed(BUTTON_START)) {
-    // manualMode = !manualMode;
-    // autonomousMode = !autonomousMode;
-    // delay(500); // Evitar múltiples cambios de modo rápidos
-  // }
+}
 
-  // delay(100); // Esperar un poco antes de la siguiente lectura
+// Función para manejar el modo manual
+void handleManualMode() {
+  // Leer los valores de los joysticks
+  int joyLHori = xboxController.xboxNotif.joyLHori;
+  int joyLVert = xboxController.xboxNotif.joyLVert;
+  int joyRHori = xboxController.xboxNotif.joyRHori;
+  int joyRVert = xboxController.xboxNotif.joyRVert;
+  int trigLT = xboxController.xboxNotif.trigLT;
+  int trigRT = xboxController.xboxNotif.trigRT;
+  bool btnA = xboxController.xboxNotif.btnA;
+  bool btnB = xboxController.xboxNotif.btnB;
+  bool btnX = xboxController.xboxNotif.btnX;
+
+  Serial.print("Botón A: ");
+  Serial.println(btnA);
+  Serial.print("Botón B: ");
+  Serial.println(btnB);
+  Serial.print("Botón X: ");
+  Serial.println(btnX);
+  Serial.print("Gatillo izquierdo: ");
+  Serial.println(trigLT);
+  Serial.print("Gatillo derecho: ");
+  Serial.println(trigRT);
+  Serial.print("Joystick izquierdo horizontal: ");
+  Serial.println(joyLHori);
+  Serial.print("Joystick izquierdo vertical: ");
+  Serial.println(joyLVert);
+  Serial.print("Joystick derecho horizontal: ");
+  Serial.println(joyRHori);
+  Serial.print("Joystick derecho vertical: ");
+  Serial.println(joyRVert);
+  Serial.println("---- Control ---- End ----");
+
+  DIRECTION dir = STOP;
+  int speed = BRAKER;
+
+ // Control dirección y velocidad
+  int maxSpeed = 135;
+
+  if (trigRT > 300) {
+    // Direcciones hacia adelante
+    if (joyLHori >= 48000) {
+      dir = FORWARD_RIGHT;
+    } else if (joyLHori <= 16000) {
+      dir = FORWARD_LEFT;
+    } else {
+      dir = FORWARD;
+    }
+    speed = map(trigRT, 0, 1023, 0, maxSpeed);
+  } else if (trigLT > 300) {
+    // Direcciones hacia atrás
+    if (joyLHori >= 48000) {
+      dir = BACKWARD_RIGHT;
+    } else if (joyLHori <= 16000) {
+      dir = BACKWARD_LEFT;
+    } else {
+      dir = BACKWARD;
+    }
+    speed = map(trigLT, 0, 1023, 0, maxSpeed);
+  } else {
+    // Direcciones laterales
+    if (joyLHori >= 48000) {
+      dir = RIGHT;
+      speed = maxSpeed * 0.8;
+    } else if (joyLHori <= 16000) {
+      dir = LEFT;
+      speed = maxSpeed * 0.8;
+    } else {
+      dir = STOP;
+      speed = 0;
+    }
+  }
+
+  // Control velocidad
+//  if (btnA) {
+//    speed = MEDIUM;
+//  } else if (btnX) {
+//     speed = TOP;
+//   } else if (btnB) {
+//     speed = SLOW;
+//   } else {
+//     speed = BRAKER;
+//   }
+
+  controlEngine(speed, dir);
   printVariables(direction, velocidad);
 }
 
@@ -134,7 +246,7 @@ void setupInfraredSensors() {
 }
 
 // Función para controlar los motores
-void controlEngine(VELOCIDAD speed, DIRECTION dir) {
+void controlEngine(int speed, DIRECTION dir) {
   // Detener motores para evitar picos de voltaje
   digitalWrite(ENG1PIN1, LOW);
   digitalWrite(ENG1PIN2, LOW);
@@ -142,7 +254,7 @@ void controlEngine(VELOCIDAD speed, DIRECTION dir) {
   digitalWrite(ENG2PIN2, LOW);
   ledcWrite(ENABLE1PIN, 0);
   ledcWrite(ENABLE2PIN, 0);
-  
+
   delayMicroseconds(25);  // Pequeña pausa
 
   switch (dir) {
@@ -161,18 +273,46 @@ void controlEngine(VELOCIDAD speed, DIRECTION dir) {
       direction = "BACKWARD";
       break;
     case RIGHT:
-      digitalWrite(ENG1PIN1, LOW);
-      digitalWrite(ENG1PIN2, HIGH);
-      digitalWrite(ENG2PIN1, HIGH);
-      digitalWrite(ENG2PIN2, LOW);
-      direction = "RIGHT";
-      break;
-    case LEFT:
       digitalWrite(ENG1PIN1, HIGH);
       digitalWrite(ENG1PIN2, LOW);
       digitalWrite(ENG2PIN1, LOW);
       digitalWrite(ENG2PIN2, HIGH);
+      direction = "RIGHT";
+      break;
+    case LEFT:
+      digitalWrite(ENG1PIN1, LOW);
+      digitalWrite(ENG1PIN2, HIGH);
+      digitalWrite(ENG2PIN1, HIGH);
+      digitalWrite(ENG2PIN2, LOW);
       direction = "LEFT";
+      break;
+    case FORWARD_RIGHT:
+      digitalWrite(ENG1PIN1, HIGH);
+      digitalWrite(ENG1PIN2, LOW);
+      digitalWrite(ENG2PIN1, LOW);
+      digitalWrite(ENG2PIN2, LOW);
+      direction = "FORWARD_RIGHT";
+      break;
+    case FORWARD_LEFT:
+      digitalWrite(ENG1PIN1, LOW);
+      digitalWrite(ENG1PIN2, LOW);
+      digitalWrite(ENG2PIN1, HIGH);
+      digitalWrite(ENG2PIN2, LOW);
+      direction = "FORWARD_LEFT";
+      break;
+    case BACKWARD_RIGHT:
+      digitalWrite(ENG1PIN1, LOW);
+      digitalWrite(ENG1PIN2, HIGH);
+      digitalWrite(ENG2PIN1, LOW);
+      digitalWrite(ENG2PIN2, LOW);
+      direction = "BACKWARD_RIGHT";
+      break;
+    case BACKWARD_LEFT:
+      digitalWrite(ENG1PIN1, LOW);
+      digitalWrite(ENG1PIN2, LOW);
+      digitalWrite(ENG2PIN1, LOW);
+      digitalWrite(ENG2PIN2, HIGH);
+      direction = "BACKWARD_LEFT";
       break;
     case STOP:
     default:
@@ -184,7 +324,10 @@ void controlEngine(VELOCIDAD speed, DIRECTION dir) {
       break;
   }
   delayMicroseconds(25);  // Pequeña pausa
-  controlSpeed(speed);
+  // controlSpeed(speed);
+    ledcWrite(ENABLE1PIN, speed); // Canal PWM para motor izquierdo
+    ledcWrite(ENABLE2PIN, speed); // Canal PWM para motor derecho
+    velocidad = speed;
 }
 
 // Función para controlar velocidad
@@ -195,7 +338,6 @@ void controlSpeed(VELOCIDAD speed) {
       ledcWrite(ENABLE2PIN, slow); // Canal PWM para motor derecho
       velocidad = slow;
     case MEDIUM:
-    default:
       ledcWrite(ENABLE1PIN, medium); // Canal PWM para motor izquierdo
       ledcWrite(ENABLE2PIN, medium); // Canal PWM para motor derecho
       velocidad = medium;
@@ -203,6 +345,11 @@ void controlSpeed(VELOCIDAD speed) {
       ledcWrite(ENABLE1PIN, medium); // Canal PWM para motor izquierdo
       ledcWrite(ENABLE2PIN, medium); // Canal PWM para motor derecho
       velocidad = top;
+    case BRAKER:
+    default:
+      ledcWrite(ENABLE1PIN, braker); // Canal PWM para motor izquierdo
+      ledcWrite(ENABLE2PIN, braker); // Canal PWM para motor derecho
+      velocidad = braker;
   }
 }
 
@@ -218,26 +365,17 @@ float readDistance(int triggerPin, int echoPin) {
   return distance;
 }
 
-// Función para manejar el modo manual
-void handleManualMode() {
-//   int speed = 255;
-//   direction dir = STOP;
-// 
-//   if (gamepad.isPressed(BUTTON_UP)) {
-//     dir = FORWARD;
-//   } else if (gamepad.isPressed(BUTTON_DOWN)) {
-//     dir = BACKWARD;
-//   } else if (gamepad.isPressed(BUTTON_RIGHT)) {
-//     dir = RIGHT;
-//   } else if (gamepad.isPressed(BUTTON_LEFT)) {
-//     dir = LEFT;
-//   }
-// 
-//   controlEngine(speed, dir);
-}
-
 // Función para manejar el modo autónomo
-void handleAutonomousMode(float distanceFront, float distanceSide, bool irSensor1, bool irSensor2) {
+void handleAutonomousMode() {
+  // Leer distancias desde los sensores ultrasónicos
+  float distanceFront = readDistance(SOUND1TRIGGER, SOUND1ECHO);
+  float distanceSide = readDistance(SOUND2TRIGGER, SOUND2ECHO);
+
+  // Leer los valores de los sensores infrarrojos
+  bool irSensor1 = digitalRead(IR1PIN);
+  bool irSensor2 = digitalRead(IR2PIN);
+
+
   if (distanceFront < 10) {
     handleFrontObstacle(distanceFront);
     Serial.println("Acción de ataque");
